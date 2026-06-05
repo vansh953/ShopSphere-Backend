@@ -1,0 +1,40 @@
+const express = require('express')
+const router = express.Router()
+const {
+  register,
+  verifyOTP,
+  login,
+  logout,
+  forgotPassword,
+  resetPassword,
+  getMe,
+  updateProfile
+} = require('../controllers/auth.controller')
+const { protect } = require('../middleware/auth.middleware')
+const { validateRegister, validateLogin } = require('../middleware/validate')
+const { authLimiter } = require('../middleware/rateLimit')
+
+// Public routes
+router.post('/register', authLimiter, validateRegister, register)
+router.post('/verify-otp', authLimiter, verifyOTP)
+router.post('/login', authLimiter, validateLogin, login)
+router.post('/logout', logout)
+router.post('/forgot-password', authLimiter, forgotPassword)
+router.post('/reset-password', authLimiter, resetPassword)
+
+// Google OAuth
+router.get('/google', require('passport').authenticate('google', { scope: ['profile', 'email'] }))
+router.get('/google/callback',
+  require('passport').authenticate('google', { failureRedirect: `${process.env.USER_FRONTEND_URL}/login` }),
+  (req, res) => {
+    const generateToken = require('../utils/generateToken')
+    generateToken(res, req.user._id, req.user.role)
+    res.redirect(`${process.env.USER_FRONTEND_URL}/`)
+  }
+)
+
+// Protected routes
+router.get('/me', protect, getMe)
+router.put('/update-profile', protect, updateProfile)
+
+module.exports = router
