@@ -4,11 +4,13 @@ const cors = require('cors')
 const helmet = require('helmet')
 const cookieParser = require('cookie-parser')
 const http = require('http')
+const passport = require('passport')          // ← add
 const connectDB = require('./config/db')
 const { initSocket } = require('./utils/socket')
 
 dotenv.config()
 connectDB()
+require('./config/passport')                  // ← add (registers Google strategy)
 
 const app = express()
 const server = http.createServer(app)
@@ -16,12 +18,17 @@ initSocket(server)
 
 app.use(helmet())
 app.use(cors({
-  origin: [process.env.USER_FRONTEND_URL, process.env.ADMIN_FRONTEND_URL],
+  origin: [
+    "http://localhost:3000",
+    "https://your-frontend-domain.com"
+  ],
   credentials: true
 }))
 app.use(express.json())
 app.use(cookieParser())
+app.use(passport.initialize())               // ← add
 
+// ... rest of your routes unchanged
 app.use('/api/auth',         require('./routes/auth.routes'))
 app.use('/api/products',     require('./routes/product.routes'))
 app.use('/api/cart',         require('./routes/cart.routes'))
