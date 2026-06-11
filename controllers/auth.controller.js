@@ -1,4 +1,5 @@
 const User = require('../models/User')
+const bcrypt = require('bcryptjs')
 const generateToken = require('../utils/generateToken')
 const generateOTP = require('../utils/generateOTP')
 const { sendEmail, otpTemplate, resetPasswordTemplate } = require('../utils/sendEmail')
@@ -13,11 +14,11 @@ const register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email already registered' })
     }
 
-    const { otp, expiresAt } = generateOTP()
+    const { otp, hashedOTP, expiresAt } = await generateOTP()
 
     const user = await User.create({
       name, email, password,
-      otp: { code: otp, expiresAt },
+      otp: { code: hashedOTP, expiresAt, attempts: 0 },
       isVerified: false
     })
 
@@ -41,19 +42,32 @@ const verifyOTP = async (req, res) => {
     const user = await User.findById(userId)
     if (!user) return res.status(404).json({ success: false, message: 'User not found' })
 
-    if (user.otp.code !== otp) {
-      return res.status(400).json({ success: false, message: 'Invalid OTP' })
+    // Check max attempts
+    if (user.otp.attempts >= 5) {
+      user.otp = { code: null, expiresAt: null, attempts: 0 }
+      await user.save()
+      return res.status(400).json({ success: false, message: 'Too many attempts. Please request a new OTP.' })
     }
 
+    // Check expiry first
     if (user.otp.expiresAt < new Date()) {
       return res.status(400).json({ success: false, message: 'OTP expired' })
     }
 
+    // Check OTP using bcrypt
+    const isOTPValid = await bcrypt.compare(otp, user.otp.code)
+    if (!isOTPValid) {
+      user.otp.attempts += 1
+      await user.save()
+      return res.status(400).json({ success: false, message: `Invalid OTP. ${5 - user.otp.attempts} attempts remaining.` })
+    }
+
+    // Success — reset OTP
     user.isVerified = true
-    user.otp = { code: null, expiresAt: null }
+    user.otp = { code: null, expiresAt: null, attempts: 0 }
     await user.save()
 
-    generateToken(res, user._id, user.role)
+    generateToken(res, user._id, user.role, user.tokenVersion)
 
     res.status(200).json({ success: true, message: 'Account verified successfully', user: { _id: user._id, name: user.name, email: user.email, role: user.role } })
   } catch (error) {
@@ -78,7 +92,7 @@ const login = async (req, res) => {
     const isMatch = await user.comparePassword(password)
     if (!isMatch) return res.status(400).json({ success: false, message: 'Invalid email or password' })
 
-    generateToken(res, user._id, user.role)
+    generateToken(res, user._id, user.role, user.tokenVersion)
 
     res.status(200).json({ success: true, message: 'Login successful', user: { _id: user._id, name: user.name, email: user.email, role: user.role, avatar: user.avatar } })
   } catch (error) {
@@ -88,8 +102,15 @@ const login = async (req, res) => {
 
 // @POST /api/auth/logout
 const logout = async (req, res) => {
-  res.cookie('token', '', { httpOnly: true, expires: new Date(0) })
-  res.status(200).json({ success: true, message: 'Logged out successfully' })
+  try {
+    if (req.user) {
+      await User.findByIdAndUpdate(req.user._id, { $inc: { tokenVersion: 1 } })
+    }
+    res.cookie('token', '', { httpOnly: true, expires: new Date(0) })
+    res.status(200).json({ success: true, message: 'Logged out successfully' })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
 }
 
 // @POST /api/auth/forgot-password
@@ -100,8 +121,8 @@ const forgotPassword = async (req, res) => {
     const user = await User.findOne({ email })
     if (!user) return res.status(404).json({ success: false, message: 'No account found with this email' })
 
-    const { otp, expiresAt } = generateOTP()
-    user.otp = { code: otp, expiresAt }
+    const { otp, hashedOTP, expiresAt } = await generateOTP()
+    user.otp = { code: hashedOTP, expiresAt, attempts: 0 }
     await user.save()
 
     await sendEmail({
@@ -124,16 +145,26 @@ const resetPassword = async (req, res) => {
     const user = await User.findById(userId)
     if (!user) return res.status(404).json({ success: false, message: 'User not found' })
 
-    if (user.otp.code !== otp) {
-      return res.status(400).json({ success: false, message: 'Invalid OTP' })
+    // Check max attempts
+    if (user.otp.attempts >= 5) {
+      user.otp = { code: null, expiresAt: null, attempts: 0 }
+      await user.save()
+      return res.status(400).json({ success: false, message: 'Too many attempts. Please request a new OTP.' })
     }
 
     if (user.otp.expiresAt < new Date()) {
       return res.status(400).json({ success: false, message: 'OTP expired' })
     }
 
+    const isOTPValid = await bcrypt.compare(otp, user.otp.code)
+    if (!isOTPValid) {
+      user.otp.attempts += 1
+      await user.save()
+      return res.status(400).json({ success: false, message: `Invalid OTP. ${5 - user.otp.attempts} attempts remaining.` })
+    }
+
     user.password = newPassword
-    user.otp = { code: null, expiresAt: null }
+    user.otp = { code: null, expiresAt: null, attempts: 0 }
     await user.save()
 
     res.status(200).json({ success: true, message: 'Password reset successful' })

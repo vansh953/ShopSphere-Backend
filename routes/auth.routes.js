@@ -18,7 +18,7 @@ const { authLimiter } = require('../middleware/rateLimit')
 router.post('/register', authLimiter, validateRegister, register)
 router.post('/verify-otp', authLimiter, verifyOTP)
 router.post('/login', authLimiter, validateLogin, login)
-router.post('/logout', logout)
+router.post('/logout', protect, logout)
 router.post('/forgot-password', authLimiter, forgotPassword)
 router.post('/reset-password', authLimiter, resetPassword)
 

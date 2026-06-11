@@ -122,10 +122,24 @@ const deleteProduct = async (req, res) => {
 // @GET /api/admin/orders
 const getAllOrders = async (req, res) => {
   try {
-    const orders = await Order.find()
+    const { page = 1, limit = 20, status } = req.query
+
+    const query = status ? { orderStatus: status } : {}
+
+    const total = await Order.countDocuments(query)
+    const orders = await Order.find(query)
       .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit))
       .populate('userId', 'name email')
-    res.status(200).json({ success: true, orders })
+
+    res.status(200).json({
+      success: true,
+      total,
+      page: Number(page),
+      pages: Math.ceil(total / limit),
+      orders
+    })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
@@ -169,8 +183,30 @@ const updateOrderStatus = async (req, res) => {
 // @GET /api/admin/users
 const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({ role: 'user' }).select('-password')
-    res.status(200).json({ success: true, users })
+    const { page = 1, limit = 20, search } = req.query
+
+    const query = { role: 'user' }
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ]
+    }
+
+    const total = await User.countDocuments(query)
+    const users = await User.find(query)
+      .select('-password')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit))
+
+    res.status(200).json({
+      success: true,
+      total,
+      page: Number(page),
+      pages: Math.ceil(total / limit),
+      users
+    })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
