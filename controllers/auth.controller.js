@@ -71,6 +71,10 @@ const login = async (req, res) => {
 
     if (!user.isVerified) return res.status(400).json({ success: false, message: 'Please verify your email first' })
 
+    if (!user.password) {
+      return res.status(400).json({ success: false, message: 'This account uses Google login. Please sign in with Google.' })
+    }
+
     const isMatch = await user.comparePassword(password)
     if (!isMatch) return res.status(400).json({ success: false, message: 'Invalid email or password' })
 

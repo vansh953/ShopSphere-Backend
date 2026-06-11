@@ -8,9 +8,17 @@ const createReview = async (req, res) => {
   try {
     const { productId, orderId, rating, comment } = req.body
 
+    if (!orderId) {
+      return res.status(400).json({ success: false, message: 'orderId is required to submit a review' })
+    }
+
     const order = await Order.findById(orderId)
     if (!order || order.orderStatus !== 'delivered') {
       return res.status(400).json({ success: false, message: 'You can only review delivered orders' })
+    }
+
+    if (order.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized' })
     }
 
     const existing = await Review.findOne({ userId: req.user._id, productId })

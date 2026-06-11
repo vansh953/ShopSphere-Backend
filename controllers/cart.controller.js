@@ -35,12 +35,11 @@ const addToCart = async (req, res) => {
       existingItem.quantity += quantity
     } else {
       cart.products.push({ productId, quantity })
+      // Only track interaction on first add
+      await Interaction.create({ userId: req.user._id, productId, action: 'cart', score: 3 })
     }
 
     await cart.save()
-
-    // Track interaction for ML
-    await Interaction.create({ userId: req.user._id, productId, action: 'cart', score: 3 })
 
     res.status(200).json({ success: true, message: 'Added to cart', cart })
   } catch (error) {

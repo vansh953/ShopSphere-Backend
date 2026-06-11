@@ -15,7 +15,7 @@ router.get('/categories', getCategories)
 // Protected routes
 router.get('/recent-views', protect, getRecentViews)
 
-// Must be last — catches /:id
-router.get('/:id', protect, getProductById)
+// FIX: removed protect — product detail should be public
+router.get('/:id', getProductById)
 
 module.exports = router

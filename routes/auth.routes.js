@@ -22,10 +22,13 @@ router.post('/logout', logout)
 router.post('/forgot-password', authLimiter, forgotPassword)
 router.post('/reset-password', authLimiter, resetPassword)
 
+// Google OAuth
+router.get('/google', require('passport').authenticate('google', { scope: ['profile', 'email'] }))
+
 router.get('/google/callback',
-  require('passport').authenticate('google', { 
-    session: false,                                                    // ← add this
-    failureRedirect: `${process.env.USER_FRONTEND_URL}/login` 
+  require('passport').authenticate('google', {
+    session: false,
+    failureRedirect: `${process.env.USER_FRONTEND_URL}/login`
   }),
   (req, res) => {
     try {
@@ -36,7 +39,7 @@ router.get('/google/callback',
       generateToken(res, req.user._id, req.user.role)
       res.redirect(`${process.env.USER_FRONTEND_URL}/`)
     } catch (err) {
-      console.error('Google callback error:', err)   // ← this will show in Render logs
+      console.error('Google callback error:', err)
       res.redirect(`${process.env.USER_FRONTEND_URL}/login`)
     }
   }

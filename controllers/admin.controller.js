@@ -38,12 +38,11 @@ const getDashboard = async (req, res) => {
   }
 }
 
-// @POST /api/admin/products (AI powered)
+// @POST /api/admin/products
 const addProduct = async (req, res) => {
   try {
     let productData = req.body
 
-    // If only name provided, use AI to fill rest
     if (req.body.useAI && req.body.name) {
       const aiResponse = await axios.post(
         'https://api.anthropic.com/v1/messages',
@@ -75,7 +74,6 @@ const addProduct = async (req, res) => {
       productData = { ...productData, ...aiData }
     }
 
-    // Handle image upload
     if (req.file) {
       const result = await uploadToCloudinary(req.file.buffer)
       productData.image = result.secure_url
@@ -83,7 +81,6 @@ const addProduct = async (req, res) => {
 
     const product = await Product.create(productData)
 
-    // Notify all users about new product via socket
     const io = getIO()
     io.emit('newProduct', { message: `New product added: ${product.name}`, product })
 
@@ -139,6 +136,11 @@ const updateOrderStatus = async (req, res) => {
   try {
     const { orderStatus } = req.body
 
+    const validStatuses = ['placed', 'confirmed', 'shipped', 'out_for_delivery', 'delivered', 'cancelled', 'returned']
+    if (!validStatuses.includes(orderStatus)) {
+      return res.status(400).json({ success: false, message: 'Invalid order status' })
+    }
+
     const order = await Order.findByIdAndUpdate(
       req.params.id,
       { orderStatus },
@@ -146,7 +148,6 @@ const updateOrderStatus = async (req, res) => {
     )
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' })
 
-    // Notify user via socket
     const notification = await Notification.create({
       userId: order.userId,
       title: 'Order Update',

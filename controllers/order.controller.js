@@ -10,7 +10,21 @@ const { getIO } = require('../utils/socket')
 // @POST /api/orders/create
 const createOrder = async (req, res) => {
   try {
-    const { products, totalAmount, discount, couponCode, paymentId, shippingAddress } = req.body
+    const { products, discount, couponCode, paymentId, shippingAddress } = req.body
+
+    // Recalculate total on backend — never trust frontend price
+    let totalAmount = 0
+    for (const item of products) {
+      const product = await Product.findById(item.productId)
+      if (!product) {
+        return res.status(404).json({ success: false, message: `Product not found: ${item.productId}` })
+      }
+      totalAmount += product.discounted_price * item.quantity
+    }
+
+    // Apply discount
+    if (discount) totalAmount -= discount
+    if (totalAmount < 0) totalAmount = 0
 
     const order = await Order.create({
       userId: req.user._id,
@@ -27,7 +41,7 @@ const createOrder = async (req, res) => {
     // Clear cart after order
     await Cart.findOneAndUpdate({ userId: req.user._id }, { products: [] })
 
-    // Track interaction for ML
+    // Track interaction for ML + reduce stock
     for (const item of products) {
       await Interaction.create({
         userId: req.user._id,
@@ -35,7 +49,6 @@ const createOrder = async (req, res) => {
         action: 'purchase',
         score: 5
       })
-      // Reduce stock
       await Product.findByIdAndUpdate(item.productId, {
         $inc: { stock: -item.quantity }
       })
@@ -99,6 +112,10 @@ const downloadInvoice = async (req, res) => {
     const order = await Order.findById(req.params.id)
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' })
 
+    if (order.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized to access this invoice' })
+    }
+
     const pdfBuffer = await generateInvoice(order)
 
     res.set({
@@ -120,6 +137,10 @@ const requestReturn = async (req, res) => {
 
     const order = await Order.findById(req.params.id)
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' })
+
+    if (order.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized' })
+    }
 
     if (order.orderStatus !== 'delivered') {
       return res.status(400).json({ success: false, message: 'Only delivered orders can be returned' })

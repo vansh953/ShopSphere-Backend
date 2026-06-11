@@ -18,6 +18,16 @@ router.get('/', async (req, res) => {
   }
 })
 
+// FIX: mark-all-read MUST be before /:id/read — otherwise Express matches "mark-all-read" as an :id
+router.put('/mark-all-read', async (req, res) => {
+  try {
+    await Notification.updateMany({ userId: req.user._id, isRead: false }, { isRead: true })
+    res.status(200).json({ success: true, message: 'All notifications marked as read' })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+})
+
 // PUT /api/notifications/:id/read
 router.put('/:id/read', async (req, res) => {
   try {
@@ -26,16 +36,6 @@ router.put('/:id/read', async (req, res) => {
       { isRead: true }
     )
     res.status(200).json({ success: true, message: 'Marked as read' })
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message })
-  }
-})
-
-// PUT /api/notifications/mark-all-read
-router.put('/mark-all-read', async (req, res) => {
-  try {
-    await Notification.updateMany({ userId: req.user._id, isRead: false }, { isRead: true })
-    res.status(200).json({ success: true, message: 'All notifications marked as read' })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
