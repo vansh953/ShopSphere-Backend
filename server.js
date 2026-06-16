@@ -16,6 +16,8 @@ const app = express()
 const server = http.createServer(app)
 initSocket(server)
 
+app.set('trust proxy', 1) // required on Render so rate limiting / IPs work correctly behind the proxy
+
 app.use(helmet())
 app.use(cors({
   origin: ["http://localhost:5173", "https://your-frontend-domain.com"],
