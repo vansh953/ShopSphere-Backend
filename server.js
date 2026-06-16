@@ -18,7 +18,7 @@ initSocket(server)
 
 app.use(helmet())
 app.use(cors({
-  origin: ["http://localhost:3000", "https://your-frontend-domain.com"],
+  origin: ["http://localhost:5173", "https://your-frontend-domain.com"],
   credentials: true
 }))
 app.use(express.json())
